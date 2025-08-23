@@ -11,16 +11,23 @@ export function validateEmailEnvironment() {
   const missing = required.filter(key => !process.env[key]);
   
   if (missing.length > 0) {
-    throw new Error(
-      `Missing required email environment variables: ${missing.join(', ')}\n` +
+    const message = `Missing required email environment variables: ${missing.join(', ')}\n` +
       `Please add these to your environment:\n` +
       `SMTP_HOST=your-smtp-server.com\n` +
       `SMTP_PORT=587\n` +
       `SMTP_USER=your-username\n` +
       `SMTP_PASS=your-password\n` +
-      `EMAIL_FROM=noreply@your-domain.com`
-    );
+      `EMAIL_FROM=noreply@your-domain.com`;
+
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(message);
+    } else {
+      console.warn(message);
+      return false;
+    }
   }
+
+  return true;
 }
 
 // Environment validation for database
@@ -31,4 +38,6 @@ export function validateDatabaseEnvironment() {
       'Please add DATABASE_URL=your-database-connection-string to your environment.'
     );
   }
+
+  return !!process.env.DATABASE_URL;
 }

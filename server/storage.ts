@@ -102,13 +102,13 @@ export class MemStorage implements IStorage {
     return Array.from(this.customers.values()).find(customer => customer.email === email);
   }
 
-  async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
+      async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
     const id = randomUUID();
     const customer: Customer = {
       ...insertCustomer,
       id,
-      company: insertCustomer.company || null,
-      phone: insertCustomer.phone || null,
+      company: insertCustomer.company ?? null,
+      phone: insertCustomer.phone ?? null,
       createdAt: new Date(),
     };
     this.customers.set(id, customer);
@@ -120,7 +120,7 @@ export class MemStorage implements IStorage {
     const address: Address = {
       ...insertAddress,
       id,
-      customerId: insertAddress.customerId || null,
+      customerId: insertAddress.customerId,
       country: insertAddress.country || "Australia",
     };
     this.addresses.set(id, address);

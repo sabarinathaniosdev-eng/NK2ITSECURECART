@@ -1,10 +1,12 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import cors from "cors";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(cors());
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -60,11 +62,60 @@ app.use((req, res, next) => {
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-  }, () => {
-    log(`serving on port ${port}`);
-  });
+
+  const host = "0.0.0.0";
+  const startPort = parseInt(process.env.PORT || "5000", 10);
+
+  async function listenWithRetry(srv: import("http").Server, portStart: number, maxAttempts = 10) {
+    for (let i = 0; i < maxAttempts; i++) {
+      const tryPort = portStart + i;
+
+      // Wrap listen in a promise that resolves on success or rejects on error
+      const p = new Promise<number>((resolve, reject) => {
+        const onError = (err: any) => {
+          srv.removeListener("listening", onListening);
+          reject(err);
+        };
+
+        const onListening = () => {
+          srv.removeListener("error", onError);
+          resolve(tryPort);
+        };
+
+        srv.once("error", onError);
+        try {
+          srv.listen({ port: tryPort, host }, () => {
+            onListening();
+          });
+        } catch (err) {
+          srv.removeListener("error", onError);
+          reject(err);
+        }
+      });
+
+      try {
+        const boundPort = await p;
+        return boundPort;
+      } catch (err: any) {
+        // If port in use, try next one (development only)
+        if (err && err.code === "EADDRINUSE") {
+          log(`port ${tryPort} in use, trying next port...`);
+          // continue loop to try next port
+        } else {
+          // For other errors, rethrow
+          throw err;
+        }
+      }
+    }
+
+    throw new Error(`Unable to bind server after ${maxAttempts} attempts starting at ${portStart}`);
+  }
+
+  try {
+    const boundPort = await listenWithRetry(server, startPort, 20);
+    log(`serving on port ${boundPort}`);
+  } catch (err) {
+    console.error("Failed to start server:", err);
+    process.exit(1);
+  }
 })();
