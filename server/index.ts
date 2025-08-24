@@ -64,56 +64,18 @@ app.use((req, res, next) => {
   // It is the only port that is not firewalled.
 
   const host = "0.0.0.0";
-  const startPort = parseInt(process.env.PORT || "5000", 10);
-
-  async function listenWithRetry(srv: import("http").Server, portStart: number, maxAttempts = 10) {
-    for (let i = 0; i < maxAttempts; i++) {
-      const tryPort = portStart + i;
-
-      // Wrap listen in a promise that resolves on success or rejects on error
-      const p = new Promise<number>((resolve, reject) => {
-        const onError = (err: any) => {
-          srv.removeListener("listening", onListening);
-          reject(err);
-        };
-
-        const onListening = () => {
-          srv.removeListener("error", onError);
-          resolve(tryPort);
-        };
-
-        srv.once("error", onError);
-        try {
-          srv.listen({ port: tryPort, host }, () => {
-            onListening();
-          });
-        } catch (err) {
-          srv.removeListener("error", onError);
-          reject(err);
-        }
-      });
-
-      try {
-        const boundPort = await p;
-        return boundPort;
-      } catch (err: any) {
-        // If port in use, try next one (development only)
-        if (err && err.code === "EADDRINUSE") {
-          log(`port ${tryPort} in use, trying next port...`);
-          // continue loop to try next port
-        } else {
-          // For other errors, rethrow
-          throw err;
-        }
-      }
-    }
-
-    throw new Error(`Unable to bind server after ${maxAttempts} attempts starting at ${portStart}`);
-  }
+  const port = parseInt(process.env.PORT || "5000", 10);
 
   try {
-    const boundPort = await listenWithRetry(server, startPort, 20);
-    log(`serving on port ${boundPort}`);
+    // Fail fast on listen errors in production
+    server.once("error", (err: any) => {
+      console.error("Failed to start server:", err);
+      process.exit(1);
+    });
+
+    server.listen({ port, host }, () => {
+      log(`serving on port ${port}`);
+    });
   } catch (err) {
     console.error("Failed to start server:", err);
     process.exit(1);
