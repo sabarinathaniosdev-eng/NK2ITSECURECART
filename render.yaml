@@ -11,12 +11,34 @@ services:
         value: "true"
       - key: NODE_ENV
         value: "production"
-    # Note: Render provides $PORT at runtime. Your server uses process.env.PORT.
+    # Note: Render provides $PORT at runtime; the server uses process.env.PORT.
 
-# Optional: static site (if you prefer to deploy frontend separately)
-# static sites can be added here or deployed to Netlify/Vercel
-# static:
-#   - name: securecart-frontend
-#     env: static
-#     buildCommand: "cd client && npm ci && npm run build"
-#     publishPath: "client/dist"
+static:
+  - name: securecart-frontend
+    env: static
+    plan: free
+    buildCommand: "cd client && npm ci && npm run build"
+    publishPath: "client/dist"
+    env:
+      - key: DEMO
+        value: "true"
+      # Set API base after deployment if needed (see README below)
+
+# README / Notes:
+# 1) Push this repository to a Git provider (GitHub/GitLab). Example:
+#    git remote set-url origin https://github.com/youruser/your-repo.git
+#    git add render.yaml && git commit -m "ci: add render manifest" && git push -u origin main
+#
+# 2) In Render dashboard, choose "New Web Service" -> "Create from render.yaml" or connect your repo and Render will detect this file.
+#    Render will create two services: `securecart-backend` (Node web) and `securecart-frontend` (Static site).
+#
+# 3) After services are created, set any sensitive env vars in Render UI (DATABASE_URL, SMTP_*, EMAIL_FROM). For demo you can omit DB/SMTP.
+#
+# 4) Once backend has a public URL (e.g. https://securecart-backend.onrender.com) set the frontend env var to point to it if your client needs it:
+#    - In Render static site -> Environment -> Add `VITE_API_BASE` (or `NEXT_PUBLIC_API_BASE_URL` depending on your client) = https://<backend-url>
+#
+# 5) If the client build outputs to a different folder (for example `client/dist/public`), update `publishPath` accordingly.
+#
+# 6) For a quick temporary demo without pushing to GitHub you can run the server locally and expose it with localtunnel:
+#    DEMO=true PORT=5000 node dist/index.js
+#    npx localtunnel --port 5000
