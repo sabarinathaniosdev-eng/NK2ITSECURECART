@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: securecart-backend
+    env: node
+    plan: free
+    buildCommand: "npm ci && npm run build"
+    startCommand: "node dist/index.js"
+    healthCheckPath: "/api/health"
+    env:
+      - key: DEMO
+        value: "true"
+      - key: NODE_ENV
+        value: "production"
+    # Note: Render provides $PORT at runtime. Your server uses process.env.PORT.
+
+# Optional: static site (if you prefer to deploy frontend separately)
+# static sites can be added here or deployed to Netlify/Vercel
+# static:
+#   - name: securecart-frontend
+#     env: static
+#     buildCommand: "cd client && npm ci && npm run build"
+#     publishPath: "client/dist"
