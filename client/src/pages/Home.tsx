@@ -47,7 +47,7 @@ export default function Home({ onTabChange }: HomeProps) {
             <div className="text-nk-orange text-3xl mb-4">
               <Shield className="w-8 h-8" />
             </div>
-            <h3 className="text-xl font-semibold mb-2">Authorized Reseller</h3>
+            <h3 className="text-xl font-semibold mb-2">Authorized Reselle</h3>
             <p className="text-gray-600">
               Official Symantec partner providing genuine licenses with full vendor support.
             </p>
