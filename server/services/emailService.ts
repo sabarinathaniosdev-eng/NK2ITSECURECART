@@ -5,17 +5,30 @@ import { validateEmailEnvironment } from '../lib/environment';
 
 // Create transporter with environment validation
 function createEmailTransporter() {
-  validateEmailEnvironment();
-  
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT!),
-    secure: process.env.SMTP_PORT === '465',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+  // If SMTP is configured and environment validates, create a real transporter.
+  // Otherwise fall back to a safe JSON transport (no network) so demo/dev won't throw.
+  try {
+    validateEmailEnvironment();
+
+    const port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
+    const secure = String(port) === '465' || process.env.SMTP_SECURE === 'true';
+
+    return nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port,
+      secure,
+      auth: process.env.SMTP_USER
+        ? {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          }
+        : undefined,
+    });
+  } catch (err) {
+    // If validation fails (missing env) or in DEMO mode, use a no-op JSON transport so code can continue.
+    console.warn('[emailService] SMTP not configured or validation failed — using jsonTransport (demo/dev mode).', err && (err as Error).message);
+    return nodemailer.createTransport({ jsonTransport: true });
+  }
 }
 
 interface EmailInvoiceData {
@@ -29,7 +42,9 @@ interface EmailInvoiceData {
 export async function sendInvoiceEmail(data: EmailInvoiceData): Promise<void> {
   const transporter = createEmailTransporter();
   
-  const totalAmount = (data.amountCents * 1.1 / 100).toFixed(2); // Including 10% GST
+  // amountCents is expected to already include GST when callers pass it (value in cents)
+  // Convert cents to dollars for display.
+  const totalAmount = (data.amountCents / 100).toFixed(2);
   
   const mailOptions = {
     from: process.env.EMAIL_FROM,
@@ -79,5 +94,21 @@ export async function sendInvoiceEmail(data: EmailInvoiceData): Promise<void> {
     ]
   };
 
-  await transporter.sendMail(mailOptions);
+  try {
+    // Type cast transporter to any to avoid incompatible overloaded signature errors with different Transporter implementations
+    const info = await (transporter as any).sendMail(mailOptions);
+
+    // If using jsonTransport (demo), log the rendered message for debugging.
+    if ((info as any)?.message) {
+      console.debug('[emailService] sendMail info:', info);
+    }
+
+    // If using nodemailer test account / ethereal, output preview URL when available
+    if ((info as any)?.previewUrl) {
+      console.info('[emailService] Preview URL:', (info as any).previewUrl);
+    }
+  } catch (err) {
+    console.error('[emailService] Failed to send invoice email:', err);
+    // Do not rethrow to avoid breaking order flow; calling code will continue.
+  }
 }

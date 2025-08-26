@@ -217,11 +217,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Generate and send invoice via email
         try {
+          // Use totalAmount (includes GST) for invoice generation and emailing
+          const invoiceAmountCents = Math.round(totalAmount * 100);
+
           const pdfBuffer = await generateInvoicePDF({
             id: order.id,
             email: checkoutData.email,
             licenseKey: licenseKeysData[0]?.keys[0] || "DEMO-LICENSE-KEY",
-            amountCents: Math.round(totalAmount * 100)
+            amountCents: invoiceAmountCents
           });
 
           // Save invoice record to database
@@ -232,15 +235,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             id: order.id,
             email: checkoutData.email,
             licenseKey: licenseKeysData[0]?.keys[0] || "DEMO-LICENSE-KEY",
-            amountCents: Math.round(subtotal * 100)
+            amountCents: invoiceAmountCents
           }, gstCents, pdfFileName);
 
-          // Send email with PDF attachment
+          // Send email with PDF attachment using the same invoice amount
           await sendInvoiceEmail({
             email: checkoutData.email,
             invoiceId: order.id,
             licenseKey: licenseKeysData[0]?.keys[0] || "DEMO-LICENSE-KEY",
-            amountCents: Math.round(subtotal * 100),
+            amountCents: invoiceAmountCents,
             pdfBuffer
           });
         } catch (emailError) {
@@ -358,12 +361,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         keys,
       }));
       
-      // Use the new PDF generation service
+      // Use the new PDF generation service and pass order.total (includes GST)
       const pdfBuffer = await generateInvoicePDF({
         id: order.id,
         email: customer.email,
         licenseKey: licenseKeysForPdf[0]?.keys[0] || "NO-LICENSE-KEY",
-        amountCents: Math.round(parseFloat(order.subtotal) * 100)
+        amountCents: Math.round(parseFloat(order.total) * 100)
       });
       
       res.setHeader('Content-Type', 'application/pdf');
@@ -409,21 +412,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }));
       
       // Generate PDF and send email
+      const invoiceAmountCents = Math.round(parseFloat(order.total) * 100);
+
       const pdfBuffer = await generateInvoicePDF({
         id: order.id,
         email: customer.email,
         licenseKey: licenseKeysForPdf[0]?.keys[0] || "NO-LICENSE-KEY",
-        amountCents: Math.round(parseFloat(order.subtotal) * 100)
+        amountCents: invoiceAmountCents,
       });
 
       await sendInvoiceEmail({
         email: customer.email,
         invoiceId: order.id,
         licenseKey: licenseKeysForPdf[0]?.keys[0] || "NO-LICENSE-KEY",
-        amountCents: Math.round(parseFloat(order.subtotal) * 100),
-        pdfBuffer
+        amountCents: invoiceAmountCents,
+        pdfBuffer,
       });
-      
+
       res.json({ message: "Invoice sent successfully" });
     } catch (error) {
       console.error("Error sending invoice:", error);

@@ -1,13 +1,3 @@
-
-
-// interface LicenseKeyData {
-//   productId: string;  | null;  
-//   productName: string;
-//   quantity: number;
-//   orderId: string;
-//   orderItemId?: string;
-// }
-
 interface LicenseKeyData {
   productId: string | null;      // allow nulls explicitly
   productName: string;
@@ -16,11 +6,13 @@ interface LicenseKeyData {
   orderItemId?: string | null;   // allow optional null
 }
 
+// Utility: generates and validates demo license keys for orders
 class LicenseService {
   generateLicenseKeys(data: LicenseKeyData): string[] {
     const keys: string[] = [];
     
     for (let i = 0; i < data.quantity; i++) {
+      // pass productId through so prefixing works correctly
       const key = this.generateSingleLicenseKey(data.productId);
       keys.push(key);
     }
@@ -29,9 +21,9 @@ class LicenseService {
     return keys;
   }
 
-  private generateSingleLicenseKey(productId: string | null): string {
+  private generateSingleLicenseKey(productId?: string | null): string {
     // Generate license key based on product type
-    const productPrefix = this.getProductPrefix(productId);
+    const productPrefix = this.getProductPrefix(productId ?? null);
     const segments = [
       productPrefix,
       this.generateSegment(5),
@@ -49,11 +41,7 @@ class LicenseService {
       'endpoint-complete': 'SESCO',
     };
     
-    if (productId && prefixes[productId]) {
-      return prefixes[productId];
-    }
-    
-    return 'SYMNT';
+    return productId ? prefixes[productId] || 'SYMNT' : 'SYMNT';
   }
 
   private generateSegment(length: number): string {
@@ -69,7 +57,7 @@ class LicenseService {
 
   validateLicenseKey(licenseKey: string): boolean {
     // Basic validation - check format
-    const keyPattern = /^[A-Z0-9]+-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{4}$/;
+    const keyPattern = /^[A-Z0-9]{4,6}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{4}$/;
     return keyPattern.test(licenseKey);
   }
 

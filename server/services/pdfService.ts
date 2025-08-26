@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import { PrismaClient } from "@prisma/client";
+import path from 'path';
 
 const prisma = new PrismaClient();
 
@@ -29,35 +30,114 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<Buffer> {
       const gstCents = Math.round(data.amountCents * 0.1);
       const totalCents = data.amountCents + gstCents;
 
-      // Header with orange color
+      // --- Header with centered logo and right-aligned invoice metadata ---
+      const headerY = 40;
+      const logoWidth = 140;
+      const leftX = doc.page.margins.left;
+      const pageWidth = doc.page.width;
+
+      // Draw centered logo
+      const logoPath = path.join(__dirname, "..", "..", "attached_assets", "Nk2IT tag Logo_bg remove (1)_1755672419460.png");
+      try {
+         const centerX = pageWidth / 2;
+         doc.image(logoPath, centerX - logoWidth / 2, headerY, { width: logoWidth });
+      } catch (e) {
+         // continue without logo
+      }
+
+      // Small gap below logo
+      const afterLogoY = headerY +  (logoWidth * 0.35) + 8; // approximate logo height
+
+      // INVOICE title under logo (centered)
       doc.fillColor("#FF7A00")
-         .fontSize(28)
          .font("Helvetica-Bold")
-         .text("INVOICE", 50, 50);
+         .fontSize(22)
+         .text("INVOICE", leftX, afterLogoY, { width: pageWidth - doc.page.margins.left - doc.page.margins.right, align: 'center' });
 
-      // Company details
+      // Company details (left column)
+      const companyX = leftX;
+      const companyY = afterLogoY + 36;
       doc.fillColor("#000000")
-         .fontSize(16)
-         .font("Helvetica-Bold")
-         .text("NK2IT PTY LTD", 50, 100)
          .fontSize(12)
-         .font("Helvetica")
-         .text("222, 20B Lexington Drive", 50, 125)
-         .text("Norwest Business Park", 50, 140)
-         .text("Baulkham Hills NSW 2153", 50, 155);
+         .font("Helvetica-Bold")
+         .text("NK2IT PTY LTD", companyX, companyY);
 
-      // Invoice details (right side)
+      doc.font("Helvetica").fontSize(10);
+      doc.text("222, 20B Lexington Drive", companyX, companyY + 18);
+      doc.text("Norwest Business Park", companyX, companyY + 32);
+      doc.text("Baulkham Hills NSW 2153", companyX, companyY + 46);
+
+      // Invoice metadata (right column) - ensure separate lines and no mixing
+      const rightColWidth = 220;
+      const rightColX = pageWidth - doc.page.margins.right - rightColWidth;
+      const metaY = companyY;
+
+      // Prepare date and id
       const currentDate = new Date().toLocaleDateString("en-AU");
-      doc.text(`INVOICE NUMBER: ${data.id}`, 350, 100).text(
-         `Date: ${currentDate}`,
-         350,
-         120,
-      );
+      const invoiceIdRaw = (data.id || '').toString();
+
+      // Determine a font size and split the text into lines that fit the right column
+      let idFontSize = 10;
+      doc.font("Helvetica").fontSize(idFontSize);
+      while (idFontSize > 6 && doc.widthOfString(invoiceIdRaw) > rightColWidth) {
+        idFontSize -= 1;
+        doc.fontSize(idFontSize);
+      }
+
+      // Compute a conservative charsPerLine fallback based on font size
+      const approxCharWidth = Math.max(4, idFontSize * 0.6); // conservative
+      const charsPerLine = Math.max(10, Math.floor(rightColWidth / approxCharWidth));
+
+      // Use pdfkit's splitting helper when available, otherwise split by fixed chunk size
+      let lines: string[] = [];
+      if ((doc as any).splitTextToSize && typeof (doc as any).splitTextToSize === 'function') {
+        lines = (doc as any).splitTextToSize(invoiceIdRaw, rightColWidth);
+      } else {
+        // Fallback: split into chunks of charsPerLine
+        for (let i = 0; i < invoiceIdRaw.length; i += charsPerLine) {
+          lines.push(invoiceIdRaw.substring(i, i + charsPerLine));
+        }
+      }
+
+      // Debug logging to help diagnose layout issues
+      try {
+        console.debug('[PDF] invoiceIdRaw.length=', invoiceIdRaw.length, 'idFontSize=', idFontSize, 'charsPerLine=', charsPerLine, 'lines=', lines.length);
+      } catch (e) {
+        // ignore
+      }
+
+      // Render metadata labels and values right-aligned with stronger spacing
+      const labelFontSize = 12; // slightly larger label for clarity
+      const labelY = metaY; // top of metadata block
+      doc.font("Helvetica-Bold").fontSize(labelFontSize).text('INVOICE NUMBER:', rightColX, labelY, { width: rightColWidth, align: 'right' });
+
+      // Position invoice id below the label with a comfortable gap
+      const idY = labelY + labelFontSize + 6;
+      doc.font("Helvetica").fontSize(idFontSize);
+
+      // Render the wrapped invoice id as a single multi-line string so we can measure its height
+      const invoiceIdText = lines.join('\n');
+      doc.text(invoiceIdText, rightColX, idY, { width: rightColWidth, align: 'right' });
+
+      // Measure the rendered height for the invoice id block and place Date below it
+      const invoiceIdHeight = invoiceIdText ? doc.heightOfString(invoiceIdText, { width: rightColWidth, align: 'right' }) : 0;
+      const dateLabelY = idY + invoiceIdHeight + 8; // add a small gap
+
+      try {
+        console.debug('[PDF] invoiceIdHeight=', invoiceIdHeight, 'labelY=', labelY, 'idY=', idY, 'dateLabelY=', dateLabelY);
+      } catch (e) {
+        // ignore
+      }
+
+      doc.font("Helvetica-Bold").fontSize(10).text('Date:', rightColX, dateLabelY, { width: rightColWidth, align: 'right' });
+      doc.font("Helvetica").fontSize(10).text(currentDate, rightColX, dateLabelY + 14, { width: rightColWidth, align: 'right' });
+
+      // --- End header ---
 
       // Bill To section
-      doc.fontSize(14).font("Helvetica-Bold").text("BILL TO", 50, 200);
+      doc.fontSize(14).font("Helvetica-Bold").text("BILL TO", 50, companyY + 80);
 
-      doc.fontSize(12).font("Helvetica").text(`Email: ${data.email}`, 50, 225);
+      doc.fontSize(12).font("Helvetica").text(`Email: ${data.email}`, 50, companyY + 105);
 
       // Product table header
       const tableTop = 280;
