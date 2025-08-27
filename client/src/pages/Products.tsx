@@ -7,7 +7,7 @@ import { type Product } from '@shared/schema';
 
 export default function Products() {
   const { data: products, isLoading, error } = useQuery<Product[]>({
-    queryKey: ['/api/products'],
+    queryKey: ['api', 'products'],
   });
 
   if (isLoading) {

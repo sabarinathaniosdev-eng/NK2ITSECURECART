@@ -1,0 +1,14 @@
+name = "nk2telco-securecart"
+type = "webpack"
+account_id = "" # You'll need to add your Cloudflare account ID here
+
+[site]
+bucket = "./dist"
+entry-point = "workers-site"
+
+[build]
+command = "npm run build"
+output_dir = "dist"
+
+[env.production]
+name = "nk2telco-securecart-prod"
